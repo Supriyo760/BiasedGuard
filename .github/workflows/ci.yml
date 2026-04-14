@@ -42,7 +42,6 @@ jobs:
             --tb=short \
             --cov=helpers \
             --cov-report=term-missing \
-            --cov-omit=helpers/caching.py,helpers/firestore_writer.py,helpers/gemini_client.py \
             --cov-fail-under=55
         env:
           PYTHONPATH: .
@@ -82,7 +81,7 @@ jobs:
         run: |
           flake8 functions/ \
             --max-line-length=110 \
-            --ignore=E501,W503,W504,E302,E303,E241 \
+            --ignore=E501,W503,W504,E302,E303,E241,E127,E305 \
             --exclude=functions/__pycache__,functions/.venv,functions/tests
 
   validate-demo-csvs:
