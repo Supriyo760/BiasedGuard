@@ -23,6 +23,10 @@ from helpers.gemini_client import analyse_bias, detect_proxies_gemini, get_direc
 from helpers.mitigation import run_mitigation
 from helpers.anonymizer import anonymise_dataframe
 from helpers.caching import download_and_hash_csv, get_cached_scan, store_cache_entry
+from helpers.validator import (
+    validate_cf1_request, validate_cf2_request,
+    validate_cf3_request, validate_cf4_request, is_prompt_safe
+)
 from helpers.firestore_writer import (
     write_metrics, write_analysis, write_proxies, write_mitigation,
     read_metrics, check_scan_count_today, set_scan_status
@@ -80,6 +84,12 @@ def parseAndCalculateMetrics(request: Request):
 
     try:
         body = request.get_json(silent=True) or {}
+
+        # Validate request
+        is_valid, err = validate_cf1_request(body)
+        if not is_valid:
+            return cors_response({"error": err}, 400)
+
         uid = body.get("uid")
         scan_id = body.get("scan_id") or str(uuid.uuid4())
         storage_path = body.get("storage_path")
@@ -374,14 +384,18 @@ def getDirectFairDecision(request: Request):
 
     try:
         body = request.get_json(silent=True) or {}
+
+        is_valid, err = validate_cf4_request(body)
+        if not is_valid:
+            return cors_response({"error": err}, 400)
+
         uid = body.get("uid")
         scenario = body.get("scenario", "").strip()
 
-        if not scenario:
-            return cors_response({"error": "Missing scenario text"}, 400)
-
-        if len(scenario) < 10:
-            return cors_response({"error": "Scenario too short. Please provide more detail."}, 400)
+        # Prompt injection guard
+        is_safe, safety_err = is_prompt_safe(scenario)
+        if not is_safe:
+            return cors_response({"error": safety_err}, 400)
 
         logger.info(f"Direct decision request from uid={uid}")
         result = get_direct_fair_decision(scenario)
