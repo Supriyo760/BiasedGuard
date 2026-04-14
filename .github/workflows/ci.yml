@@ -32,7 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas numpy scikit-learn pytest pytest-cov
           # Install test-only mocks (no firebase needed for unit tests)
-          pip install google-cloud-firestore google-cloud-storage --no-deps || true
+          pip install google-cloud-firestore google-cloud-storage
 
       - name: Run unit tests
         run: |
