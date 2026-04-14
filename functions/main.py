@@ -7,7 +7,6 @@ Registers three HTTP Cloud Functions:
   4. getDirectFairDecision      — CF4: Standalone direct decision mode
 """
 
-import json
 import logging
 import os
 import uuid
@@ -24,12 +23,11 @@ from helpers.mitigation import run_mitigation
 from helpers.anonymizer import anonymise_dataframe
 from helpers.caching import download_and_hash_csv, get_cached_scan, store_cache_entry
 from helpers.validator import (
-    validate_cf1_request, validate_cf2_request,
-    validate_cf3_request, validate_cf4_request, is_prompt_safe
+    validate_cf1_request, validate_cf4_request, is_prompt_safe
 )
 from helpers.firestore_writer import (
     write_metrics, write_analysis, write_proxies, write_mitigation,
-    read_metrics, check_scan_count_today, set_scan_status
+    check_scan_count_today, set_scan_status
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -247,7 +245,6 @@ def geminiAnalysisAndMitigation(request: Request):
         uid = body.get("uid")
         scan_id = body.get("scan_id")
         use_case = body.get("use_case", "General")
-        group_col = body.get("group_col")
         outcome_col = body.get("outcome_col")
         sensitive_map = body.get("sensitive_map", {})
         overall_rate = body.get("overall_rate", 50.0)

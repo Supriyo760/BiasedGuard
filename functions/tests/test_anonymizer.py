@@ -1,15 +1,9 @@
 """
 BiasGuard — Test Suite: Anonymizer
-Tests name → initials, roll → hashed partial ID, district → rural/urban tag.
 Run: pytest functions/tests/test_anonymizer.py -v
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import pandas as pd
-import pytest
 
 from helpers.anonymizer import (
     anonymise_names,
@@ -46,13 +40,11 @@ class TestAnonymiseRollNumbers:
     def test_preserves_district_prefix(self):
         df = pd.DataFrame({"roll": ["10234"]})
         result = anonymise_roll_numbers(df, ["roll"])
-        # First 2 chars should be preserved
         assert result["roll"].iloc[0].startswith("10")
 
     def test_output_is_hashed(self):
         df = pd.DataFrame({"roll": ["10234"]})
         result = anonymise_roll_numbers(df, ["roll"])
-        # Should not equal original
         assert result["roll"].iloc[0] != "10234"
 
     def test_same_input_same_output(self):
@@ -106,12 +98,7 @@ class TestAnonymiseDataframe:
             "region": ["district"],
         }
         result = anonymise_dataframe(df, sensitive_map)
-
-        # Names should be anonymised
         assert result["student_name"].iloc[0] != "Rahul Kumar Sharma"
-        # Roll numbers should be anonymised
         assert result["roll_number"].iloc[0] != "10234"
-        # Districts should be tagged
         assert result["district"].iloc[0] in ["Urban", "Rural", "Peri-Urban"]
-        # Decisions should be untouched
         assert result["decision"].tolist() == [1, 0]

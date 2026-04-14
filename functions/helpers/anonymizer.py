@@ -4,7 +4,6 @@ Replaces personally identifiable information in the DataFrame before Gemini anal
 Only applied when user enables the privacy toggle.
 """
 
-import re
 import hashlib
 import pandas as pd
 from typing import List

@@ -5,9 +5,8 @@ sensitive attribute columns and the outcome (decision) column.
 """
 
 import io
-import re
 import pandas as pd
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 from google.cloud import storage
 
 
@@ -100,7 +99,6 @@ def detect_primary_group_column(df: pd.DataFrame, sensitive_map: Dict[str, List[
     candidates = [c for c in string_cols if c != outcome_col and df[c].nunique() <= 15]
 
     best_col, best_var = None, -1.0
-    outcome_numeric = pd.to_numeric(df[outcome_col], errors="coerce")
     for col in candidates:
         group_rates = df.groupby(col).apply(
             lambda x: pd.to_numeric(x[outcome_col], errors="coerce").mean()

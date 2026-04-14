@@ -60,8 +60,9 @@ def demographic_parity(group_stats: Dict) -> float:
     return round(max(rates) - min(rates), 4)
 
 
-def equal_opportunity(df: pd.DataFrame, group_col: str, outcome_col: str,
-                       ground_truth_col: str = None) -> float:
+def equal_opportunity(
+        df: pd.DataFrame, group_col: str, outcome_col: str,
+        ground_truth_col: str = None) -> float:
     """
     Equal Opportunity Difference: difference in true positive rates (TPR) across groups.
     If no ground truth column, approximates using overall approval as proxy for qualification.
@@ -95,8 +96,9 @@ def equal_opportunity(df: pd.DataFrame, group_col: str, outcome_col: str,
     return round(max(tprs) - min(tprs), 4)
 
 
-def equalized_odds(df: pd.DataFrame, group_col: str, outcome_col: str,
-                    ground_truth_col: str = None) -> float:
+def equalized_odds(
+        df: pd.DataFrame, group_col: str, outcome_col: str,
+        ground_truth_col: str = None) -> float:
     """
     Equalized Odds: average of TPR diff and FPR diff across groups.
     """
@@ -132,8 +134,9 @@ def equalized_odds(df: pd.DataFrame, group_col: str, outcome_col: str,
     return round((tpr_diff + fpr_diff) / 2, 4)
 
 
-def predictive_parity(df: pd.DataFrame, group_col: str, outcome_col: str,
-                       ground_truth_col: str = None) -> float:
+def predictive_parity(
+        df: pd.DataFrame, group_col: str, outcome_col: str,
+        ground_truth_col: str = None) -> float:
     """
     Predictive Parity: difference in precision (PPV) across groups.
     Precision = TP / (TP + FP) = among those approved, fraction actually qualified.
@@ -178,8 +181,9 @@ def compute_equity_score(dp: float, eo: float, eodds: float, pp: float) -> int:
     return max(0, min(100, int(round(score))))
 
 
-def run_full_metrics(df: pd.DataFrame, group_col: str, outcome_col: str,
-                      ground_truth_col: str = None) -> Dict[str, Any]:
+def run_full_metrics(
+        df: pd.DataFrame, group_col: str, outcome_col: str,
+        ground_truth_col: str = None) -> Dict[str, Any]:
     """
     Run all four fairness metrics and compute the equity score.
 

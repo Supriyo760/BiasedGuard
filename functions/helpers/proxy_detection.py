@@ -26,6 +26,7 @@ SURNAME_CASTE_MAP: Dict[str, str] = _load_json("surname_caste_map.json")
 DISTRICT_RURAL_MAP: Dict[str, str] = _load_json("district_rural_map.json")
 
 
+
 # ─── School Board Heuristics ───────────────────────────────────────────────────
 
 STATE_BOARDS = {
@@ -53,18 +54,18 @@ def classify_school_board(board_value: str) -> str:
 # ─── Roll Number District Decoder ─────────────────────────────────────────────
 
 BIHAR_ROLL_PREFIX_MAP = {
-    "1": "Patna (Urban)",    "2": "Nalanda",         "3": "Bhojpur",
-    "4": "Rohtas",           "5": "Kaimur",           "6": "Gaya",
-    "7": "Jehanabad",        "8": "Aurangabad",       "9": "Nawada",
-    "10": "Arwal",           "11": "Saran",           "12": "Siwan",
-    "13": "Gopalganj",       "14": "West Champaran",  "15": "East Champaran",
-    "16": "Muzaffarpur",     "17": "Sitamarhi",       "18": "Sheohar",
-    "19": "Vaishali",        "20": "Samastipur",      "21": "Darbhanga",
-    "22": "Madhubani",       "23": "Supaul",          "24": "Saharsa",
-    "25": "Madhepura",       "26": "Bhagalpur",       "27": "Banka",
-    "28": "Munger",          "29": "Lakhisarai",      "30": "Sheikhpura",
-    "31": "Begusarai",       "32": "Khagaria",        "33": "Purnea",
-    "34": "Katihar",         "35": "Araria",          "36": "Kishanganj",
+    "1": "Patna (Urban)", "2": "Nalanda", "3": "Bhojpur",
+    "4": "Rohtas", "5": "Kaimur", "6": "Gaya",
+    "7": "Jehanabad", "8": "Aurangabad", "9": "Nawada",
+    "10": "Arwal", "11": "Saran", "12": "Siwan",
+    "13": "Gopalganj", "14": "West Champaran", "15": "East Champaran",
+    "16": "Muzaffarpur", "17": "Sitamarhi", "18": "Sheohar",
+    "19": "Vaishali", "20": "Samastipur", "21": "Darbhanga",
+    "22": "Madhubani", "23": "Supaul", "24": "Saharsa",
+    "25": "Madhepura", "26": "Bhagalpur", "27": "Banka",
+    "28": "Munger", "29": "Lakhisarai", "30": "Sheikhpura",
+    "31": "Begusarai", "32": "Khagaria", "33": "Purnea",
+    "34": "Katihar", "35": "Araria", "36": "Kishanganj",
     "37": "Sehara",
 }
 

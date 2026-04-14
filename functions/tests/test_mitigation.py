@@ -1,12 +1,7 @@
 """
 BiasGuard — Test Suite: Mitigation Engine
-Tests the reweighting algorithm and before/after metric output.
 Run: pytest functions/tests/test_mitigation.py -v
 """
-
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pandas as pd
 import pytest
@@ -37,12 +32,14 @@ def fair_df():
 @pytest.fixture
 def four_group_df():
     return pd.DataFrame({
-        "group": ["General"] * 50 + ["OBC"] * 50 + ["SC"] * 50 + ["ST"] * 50,
+        "group": (["General"] * 50 + ["OBC"] * 50 + ["SC"] * 50 + ["ST"] * 50),
         "marks": [80] * 200,
-        "decision": [1] * 44 + [0] * 6 +  # 88%
-                    [1] * 32 + [0] * 18 +  # 64%
-                    [1] * 18 + [0] * 32 +  # 36%
-                    [1] * 10 + [0] * 40,   # 20%
+        "decision": (
+            [1] * 44 + [0] * 6
+            + [1] * 32 + [0] * 18
+            + [1] * 18 + [0] * 32
+            + [1] * 10 + [0] * 40
+        ),
     })
 
 
@@ -70,9 +67,8 @@ class TestReweightDecisions:
 
     def test_fair_df_minimal_change(self, fair_df):
         result = reweight_decisions(fair_df, "group", "decision")
-        # On a fair dataset, reweighting should change very few decisions
         changed = (result["_mitigated_decision"] != fair_df["decision"]).sum()
-        assert changed < 30  # Less than 15% change on fair data
+        assert changed < 30
 
 
 # ─── Full Mitigation Pipeline ─────────────────────────────────────────────────
@@ -109,8 +105,7 @@ class TestRunMitigation:
     def test_approval_rate_convergence(self, biased_df):
         result = run_mitigation(biased_df, "group", "decision")
         after_rates = list(result["after_approval_rates"].values())
-        # After mitigation, rates should be closer together
-        spread_after = max(after_rates) - min(after_rates)
         before_rates = list(result["before_approval_rates"].values())
+        spread_after = max(after_rates) - min(after_rates)
         spread_before = max(before_rates) - min(before_rates)
         assert spread_after < spread_before

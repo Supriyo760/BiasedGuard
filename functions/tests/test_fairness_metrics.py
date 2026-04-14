@@ -1,23 +1,14 @@
 """
 BiasGuard — Test Suite: Fairness Metrics Engine
-Tests all four metrics and equity score computation.
 Run: pytest functions/tests/test_fairness_metrics.py -v
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import pandas as pd
-import numpy as np
 import pytest
 
 from helpers.fairness_metrics import (
     calculate_group_stats,
     demographic_parity,
-    equal_opportunity,
-    equalized_odds,
-    predictive_parity,
     compute_equity_score,
     run_full_metrics,
 )
@@ -30,7 +21,7 @@ def perfectly_fair_df():
     """Dataset with equal approval rates across both groups (50% each)."""
     return pd.DataFrame({
         "group": ["A"] * 100 + ["B"] * 100,
-        "marks": list(range(60, 110)) * 2,
+        "marks": [80] * 200,
         "decision": ([1, 0] * 50) + ([1, 0] * 50),
     })
 
@@ -40,7 +31,7 @@ def heavily_biased_df():
     """Dataset with extreme bias: Group A 90%, Group B 10%."""
     return pd.DataFrame({
         "group": ["Urban"] * 100 + ["Rural"] * 100,
-        "marks": [80] * 100 + [78] * 100,
+        "marks": [80] * 200,
         "decision": ([1] * 90 + [0] * 10) + ([1] * 10 + [0] * 90),
     })
 
@@ -149,12 +140,10 @@ class TestEquityScore:
         assert score == 100
 
     def test_moderate_bias_score(self):
-        # dp=0.5 → 0.35×0.5×100 = 17.5 → score = 82-ish
         score = compute_equity_score(0.5, 0.0, 0.0, 0.0)
         assert 80 <= score <= 90
 
     def test_demo_dataset_score(self):
-        # Demo CSV should score ~40-50 (heavy bias)
         score = compute_equity_score(0.85, 0.70, 0.60, 0.50)
         assert score < 50
 
