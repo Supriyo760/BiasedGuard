@@ -22,6 +22,7 @@ from helpers.proxy_detection import analyse_dataframe_proxies
 from helpers.gemini_client import analyse_bias, detect_proxies_gemini, get_direct_fair_decision
 from helpers.mitigation import run_mitigation
 from helpers.anonymizer import anonymise_dataframe
+from helpers.caching import download_and_hash_csv, get_cached_scan, store_cache_entry
 from helpers.firestore_writer import (
     write_metrics, write_analysis, write_proxies, write_mitigation,
     read_metrics, check_scan_count_today, set_scan_status
@@ -96,12 +97,55 @@ def parseAndCalculateMetrics(request: Request):
                 "error": f"Daily scan limit ({MAX_SCANS_PER_DAY}) reached. Try again tomorrow."
             }, 429)
 
+        # ── Cache check — skip re-processing identical CSV uploads ──
+        try:
+            import io
+            csv_bytes, csv_hash = download_and_hash_csv(FIREBASE_STORAGE_BUCKET, storage_path)
+            cached_scan_id = get_cached_scan(uid, csv_hash)
+            if cached_scan_id and cached_scan_id != scan_id:
+                logger.info(f"Cache HIT — returning cached scan {cached_scan_id}")
+                return cors_response({
+                    "scan_id": cached_scan_id,
+                    "status": "cached",
+                    "message": "Identical dataset found in cache. Returning previous results.",
+                    "cached": True,
+                })
+        except Exception as cache_err:
+            logger.warning(f"Cache check failed (continuing without cache): {cache_err}")
+            csv_bytes = None
+
         # Mark as processing
         set_scan_status(uid, scan_id, "processing")
 
-        # Step 1: Parse CSV
+        # Step 1: Parse CSV (reuse downloaded bytes if available)
         logger.info(f"Parsing CSV for uid={uid}, scan_id={scan_id}")
-        parsed = parse_csv(FIREBASE_STORAGE_BUCKET, storage_path)
+        if csv_bytes:
+            import pandas as pd
+            parsed_df = pd.read_csv(io.BytesIO(csv_bytes), encoding="utf-8", dtype=str)
+            parsed_df.columns = [c.strip().lower().replace(" ", "_") for c in parsed_df.columns]
+            # Pass pre-downloaded df directly
+            from helpers.csv_parser import (
+                detect_outcome_column, detect_sensitive_columns,
+                detect_primary_group_column, binarise_outcome
+            )
+            columns = parsed_df.columns.tolist()
+            warnings_list = []
+            outcome_col = detect_outcome_column(columns)
+            if outcome_col is None:
+                col_uniq = {c: parsed_df[c].nunique() for c in columns}
+                outcome_col = min(col_uniq, key=col_uniq.get)
+                warnings_list.append(f"No clear decision column — using '{outcome_col}'.")
+            parsed_df = binarise_outcome(parsed_df, outcome_col)
+            sensitive_map = detect_sensitive_columns(columns)
+            group_col = detect_primary_group_column(parsed_df, sensitive_map, outcome_col)
+            parsed = {
+                "df": parsed_df, "outcome_col": outcome_col,
+                "group_col": group_col, "sensitive_map": sensitive_map,
+                "row_count": len(parsed_df), "column_names": columns,
+                "parse_warnings": warnings_list,
+            }
+        else:
+            parsed = parse_csv(FIREBASE_STORAGE_BUCKET, storage_path)
         df = parsed["df"]
         outcome_col = parsed["outcome_col"]
         group_col = parsed["group_col"]
@@ -128,6 +172,13 @@ def parseAndCalculateMetrics(request: Request):
         # Step 5: Write to Firestore
         write_metrics(uid, scan_id, dataset_name, parsed["row_count"],
                       all_sensitive, metrics)
+
+        # Store cache entry for future duplicate uploads
+        try:
+            if csv_bytes:
+                store_cache_entry(uid, csv_hash, scan_id)
+        except Exception as cache_store_err:
+            logger.warning(f"Cache store failed (non-fatal): {cache_store_err}")
 
         # Return enough info to trigger CF2 from Flutter OR let Flutter poll Firestore
         return cors_response({
