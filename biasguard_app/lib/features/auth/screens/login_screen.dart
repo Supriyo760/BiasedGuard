@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -306,7 +307,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       // SSO Button
                       OutlinedButton.icon(
-                        onPressed: () {},
+                        onPressed: _isLoading ? null : _handleGoogleSignIn,
                         icon: const Icon(Icons.g_mobiledata, size: 28),
                         label: const Text('Continue with Google'),
                         style: OutlinedButton.styleFrom(
@@ -319,6 +320,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: _isLoading ? null : _handleGuestLogin,
+                        child: const Text('Continue as Guest (Anonymous)'),
+                      ),
                     ],
                   ),
                 ),
@@ -329,4 +335,31 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  void _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    final user = await AuthService().signInWithGoogle();
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (user != null) {
+        context.go(AppRoutes.dashboard);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Social Auth failed. Try Guest Login for testing.')),
+        );
+      }
+    }
+  }
+
+  void _handleGuestLogin() async {
+    setState(() => _isLoading = true);
+    final user = await AuthService().signInAnonymously();
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (user != null) {
+        context.go(AppRoutes.dashboard);
+      }
+    }
+  }
 }
+

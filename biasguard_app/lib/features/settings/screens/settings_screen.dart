@@ -1,39 +1,86 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/theme_provider.dart';
+import '../../../core/providers/locale_provider.dart';
+import 'package:go_router/go_router.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeProvider);
+    final appLocale = ref.watch(localeProvider);
+    final isHindi = ref.watch(localeProvider.notifier).isHindi;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('System Settings'),
+        title: Text(isHindi ? 'सिस्टम सेटिंग्स' : 'System Settings'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(32),
         children: [
-          Text('Preferences', style: Theme.of(context).textTheme.titleLarge),
+          Text(isHindi ? 'दिखावट और भाषा' : 'Appearance & Language', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 24),
-          _buildSwitchTile(context, 'Strict Parity Mode', 'Enforce highest constraints on Equal Opportunity automatically.', true),
+          
+          _buildSwitchTile(
+            context, 
+            isHindi ? 'डार्क मोड' : 'Dark Mode', 
+            isHindi ? 'Sentinel Obsidian डार्क थीम लागू करें' : 'Enable high-contrast dark theme (Sentinel Obsidian).', 
+            themeMode == ThemeMode.dark,
+            (val) => ref.read(themeProvider.notifier).toggleTheme(),
+          ),
           const Divider(),
-          _buildSwitchTile(context, 'Data Anonymization', 'Automatically obfuscate PII before sending to Gemini API.', true),
-          const Divider(),
-          _buildSwitchTile(context, 'Export Reports to GCP', 'Automatically backup generated PDF reports to Google Cloud Storage bucket.', false),
+          
+          _buildDropdownTile(
+            context, 
+            isHindi ? 'भाषा' : 'Application Language', 
+            isHindi ? 'अपनी पसंदीदा इंटरफ़ेस भाषा चुनें' : 'Select your preferred interface language.', 
+            appLocale == AppLocale.en ? 'English' : 'Hindi', 
+            ['English', 'Hindi'],
+            (val) => ref.read(localeProvider.notifier).toggleLocale(),
+          ),
           const SizedBox(height: 48),
 
-          Text('API Connections', style: Theme.of(context).textTheme.titleLarge),
+          Text(isHindi ? 'वरीयताएँ' : 'Preferences', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 24),
-          _buildApiTile(context, 'Gemini 1.5 Pro', 'Connected (Latency: 112ms)', AppColors.tertiary),
-          _buildApiTile(context, 'Firebase Analytics', 'Connected', AppColors.tertiary),
-          _buildApiTile(context, 'Workday Integration', 'Disconnected', AppColors.outlineVariant),
+          _buildSwitchTile(context, isHindi ? 'सख्त समानता मोड' : 'Strict Parity Mode', isHindi ? 'स्वचालित रूप से उच्चतम बाधाएं लागू करें' : 'Enforce highest constraints automatically.', true, (v) {}),
+          const Divider(),
+          
+          const SizedBox(height: 48),
+
+          Text(isHindi ? 'कानूनी और गोपनीयता' : 'Legal & Privacy', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 24),
+          ListTile(
+            title: Text(isHindi ? 'गोपनीयता नीति' : 'Privacy Policy'),
+            subtitle: Text(isHindi ? 'हम आपके डेटा को कैसे सुरक्षित रखते हैं' : 'How we protect your data integrity.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/privacy'),
+          ),
+          const Divider(),
+          ListTile(
+            title: Text(isHindi ? 'सेवा की शर्तें' : 'Terms of Service'),
+            subtitle: Text(isHindi ? 'उपयोग की शर्तें और कानूनी विवरण' : 'Usage conditions and legal boundaries.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/terms'),
+          ),
+          
+          const SizedBox(height: 64),
+          Center(
+            child: Text(
+              'BiasGuard v1.0.0+1\nGoogle Solution Challenge 2026',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.onSurfaceVariant),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSwitchTile(BuildContext context, String title, String subtitle, bool value) {
+  Widget _buildSwitchTile(BuildContext context, String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
@@ -48,26 +95,37 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-          Switch(value: value, onChanged: (val) {}, activeColor: AppColors.primary),
+          Switch(value: value, onChanged: onChanged, activeColor: AppColors.primary),
         ],
       ),
     );
   }
 
-  Widget _buildApiTile(BuildContext context, String name, String status, Color statusColor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.surfaceContainerHighest),
-      ),
+  Widget _buildDropdownTile(BuildContext context, String title, String subtitle, String current, List<String> options, ValueChanged<String?> onChanged) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(name, style: Theme.of(context).textTheme.titleMedium),
-          Text(status, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: statusColor)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: Cross => CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(subtitle, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          DropdownButton<String>(
+            value: current,
+            dropdownColor: AppColors.surfaceContainerHigh,
+            underline: const SizedBox(),
+            onChanged: onChanged,
+            items: options.map((opt) => DropdownMenuItem(
+              value: opt,
+              child: Text(opt, style: Theme.of(context).textTheme.bodyLarge),
+            )).toList(),
+          ),
         ],
       ),
     );

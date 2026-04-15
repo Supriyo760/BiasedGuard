@@ -1,25 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/auth_service.dart';
+import '../widgets/result_skeleton.dart';
 
-class ResultsScreen extends StatelessWidget {
+class ResultsScreen extends ConsumerWidget {
   final String scanId;
 
   const ResultsScreen({super.key, required this.scanId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final uid = AuthService().currentUid ?? 'anonymous';
+    final isHindi = ref.watch(localeProvider.notifier).isHindi;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Audit Results'),
+        title: Text(isHindi ? 'ऑडिट परिणाम' : 'Audit Results'),
         actions: [
           ElevatedButton.icon(
             onPressed: () => context.pushNamed('report', extra: {'scanId': scanId}),
             icon: const Icon(Icons.picture_as_pdf),
-            label: const Text(AppStrings.downloadReport),
+            label: Text(isHindi ? 'रिपोर्ट डाउनलोड करें' : AppStrings.downloadReport),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.surfaceContainerHigh,
               foregroundColor: AppColors.onSurface,
@@ -29,33 +36,56 @@ class ResultsScreen extends StatelessWidget {
           const SizedBox(width: 16),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Section: Score & Status
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildEquityScoreCard(context),
-                const SizedBox(width: 24),
-                Expanded(child: _buildBiasStatusCard(context)),
-              ],
-            ),
-            const SizedBox(height: 32),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('scans')
+            .doc(scanId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const ResultSkeleton();
+          }
 
-            // Middle Section: Proxy Detection & AI Explanation
-            Row(
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return _buildNotFound(context);
+          }
+
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final metrics = data['metrics'] as Map<String, dynamic>? ?? {};
+          final analysis = data['analysis'] as Map<String, dynamic>? ?? {};
+          final proxies = (data['proxies'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(flex: 1, child: _buildProxyDetection(context)),
-                const SizedBox(width: 24),
-                Expanded(flex: 2, child: _buildAiAnalysis(context)),
+                // Top Section: Score & Status
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildEquityScoreCard(context, metrics, isHindi),
+                    const SizedBox(width: 24),
+                    Expanded(child: _buildBiasStatusCard(context, metrics, isHindi)),
+                  ],
+                ),
+                const SizedBox(height: 32),
+
+                // Middle Section: Proxy Detection & AI Explanation
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 1, child: _buildProxyDetection(context, proxies, isHindi)),
+                    const SizedBox(width: 24),
+                    Expanded(flex: 2, child: _buildAiAnalysis(context, analysis, isHindi)),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(24),
@@ -70,7 +100,7 @@ class ResultsScreen extends StatelessWidget {
                 foregroundColor: AppColors.onSurface,
                 side: const BorderSide(color: AppColors.outlineVariant),
               ),
-              child: const Text('Return to Dashboard'),
+              child: Text(isHindi ? 'डैशबोर्ड पर लौटें' : 'Return to Dashboard'),
             ),
             const SizedBox(width: 16),
             ElevatedButton(
@@ -80,9 +110,9 @@ class ResultsScreen extends StatelessWidget {
                 backgroundColor: AppColors.gradientStart,
                 foregroundColor: Colors.white,
               ),
-              child: const Text(
-                AppStrings.fixBias,
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Text(
+                isHindi ? 'पूर्वाग्रह सुधारें' : AppStrings.fixBias,
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -91,7 +121,29 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEquityScoreCard(BuildContext context) {
+  Widget _buildNotFound(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 64, color: AppColors.error),
+          const SizedBox(height: 16),
+          Text('Audit Data Not Found', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text('Scan ID: $scanId'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEquityScoreCard(BuildContext context, Map<String, dynamic> metrics, bool isHindi) {
+    final score = (metrics['equity_score'] ?? 0).toInt();
+    final severity = (metrics['severity'] as String?)?.toUpperCase() ?? 'PENDING';
+    
+    Color scoreColor = AppColors.tertiary;
+    if (score < 70) scoreColor = AppColors.moderateAmber;
+    if (score < 50) scoreColor = AppColors.error;
+
     return Container(
       width: 320,
       padding: const EdgeInsets.all(32),
@@ -102,7 +154,7 @@ class ResultsScreen extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            AppStrings.equityScore,
+            isHindi ? 'इक्विटी स्कोर' : AppStrings.equityScore,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 32),
@@ -113,10 +165,10 @@ class ResultsScreen extends StatelessWidget {
                 width: 160,
                 height: 160,
                 child: CircularProgressIndicator(
-                  value: 0.64,
+                  value: score / 100,
                   strokeWidth: 16,
                   backgroundColor: AppColors.surfaceContainerHighest,
-                  color: AppColors.error,
+                  color: scoreColor,
                   strokeCap: StrokeCap.round,
                 ),
               ),
@@ -124,9 +176,9 @@ class ResultsScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '64',
+                    '$score',
                     style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                          color: AppColors.error,
+                          color: scoreColor,
                           height: 1.0,
                         ),
                   ),
@@ -144,19 +196,19 @@ class ResultsScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.errorContainer.withOpacity(0.3),
+              color: scoreColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.errorContainer),
+              border: Border.all(color: scoreColor.withOpacity(0.5)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
+                Icon(Icons.shield_outlined, color: scoreColor, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  AppStrings.criticalBias,
+                  severity == 'LOW' ? (isHindi ? 'निष्पक्ष' : 'FAIR') : severity,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.error,
+                        color: scoreColor,
                         fontWeight: FontWeight.bold,
                       ),
                 ),
@@ -168,7 +220,7 @@ class ResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBiasStatusCard(BuildContext context) {
+  Widget _buildBiasStatusCard(BuildContext context, Map<String, dynamic> metrics, bool isHindi) {
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
@@ -179,43 +231,33 @@ class ResultsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Fairness Metrics Breakdown',
+            isHindi ? 'निष्पक्षता मेट्रिक्स विवरण' : 'Fairness Metrics Breakdown',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 24),
           _MetricRow(
-            label: AppStrings.demographicParity,
-            value: 0.45,
-            statusColor: AppColors.error,
-            statusText: 'Failed',
+            label: isHindi ? 'जनसांख्यिकीय समानता' : AppStrings.demographicParity,
+            value: metrics['demographic_parity'] ?? 0.0,
+            threshold: 0.8,
           ),
           const Divider(height: 32),
           _MetricRow(
-            label: AppStrings.equalOpportunity,
-            value: 0.62,
-            statusColor: AppColors.moderateAmber,
-            statusText: 'Warning',
+            label: isHindi ? 'समान अवसर' : 'Equal Opportunity',
+            value: metrics['equal_opportunity'] ?? 0.0,
+            threshold: 0.8,
           ),
           const Divider(height: 32),
           _MetricRow(
-            label: AppStrings.equalizedOdds,
-            value: 0.58,
-            statusColor: AppColors.moderateAmber,
-            statusText: 'Warning',
-          ),
-          const Divider(height: 32),
-          _MetricRow(
-            label: AppStrings.predictiveParity,
-            value: 0.92,
-            statusColor: AppColors.tertiary,
-            statusText: 'Passed',
+            label: isHindi ? 'समूह दर निरंतरता' : 'Group Rate Consistency',
+            value: metrics['consistency'] ?? 1.0,
+            threshold: 0.9,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProxyDetection(BuildContext context) {
+  Widget _buildProxyDetection(BuildContext context, List<Map<String, dynamic>> proxies, bool isHindi) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -226,27 +268,33 @@ class ResultsScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            AppStrings.proxyFeatures,
+            isHindi ? 'प्रॉक्सी सुविधाएँ' : AppStrings.proxyFeatures,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 24),
-          _ProxyCard(
-            feature: 'District_Code',
-            proxyFor: 'Protected Group (Caste/Region)',
-            correlation: '0.89',
-          ),
-          const SizedBox(height: 16),
-          _ProxyCard(
-            feature: 'Parent_Income_Bracket',
-            proxyFor: 'Protected Group (Socio-Economic)',
-            correlation: '0.74',
-          ),
+          if (proxies.isEmpty)
+             Padding(
+               padding: const EdgeInsets.symmetric(vertical: 24),
+               child: Center(child: Text(isHindi ? 'कोई महत्वपूर्ण प्रॉक्सी नहीं मिली।' : "No significant proxies detected.")),
+             ),
+          ...proxies.map((p) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _ProxyCard(
+              feature: p['column'] ?? 'Unknown',
+              proxyFor: p['reason'] ?? 'Hidden Factor',
+              correlation: p['correlation']?.toString() ?? '0.0',
+            ),
+          )),
         ],
       ),
     );
   }
 
-  Widget _buildAiAnalysis(BuildContext context) {
+  Widget _buildAiAnalysis(BuildContext context, Map<String, dynamic> analysis, bool isHindi) {
+    final summary = isHindi 
+        ? (analysis['explanation_hi'] ?? "हमारे एआई मॉडल आपके डेटासेट के अंतिम निहितार्थों को संसाधित कर रहे हैं।")
+        : (analysis['explanation_en'] ?? "Our AI models are processing the final implications of your dataset.");
+    
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
@@ -261,7 +309,7 @@ class ResultsScreen extends StatelessWidget {
               const Icon(Icons.auto_awesome, color: AppColors.primary),
               const SizedBox(width: 8),
               Text(
-                AppStrings.aiAnalysis,
+                isHindi ? 'एआई विश्लेषण' : AppStrings.aiAnalysis,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: AppColors.primary,
                     ),
@@ -269,7 +317,6 @@ class ResultsScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          // Audit Pulse Component (subtle container with left accent)
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -286,14 +333,14 @@ class ResultsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Analysis Summary",
+                  isHindi ? 'पूर्वावलोकन सारांश' : "Analysis Summary",
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: AppColors.primary,
                       ),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  "The model exhibits systemic bias in the 'Demographic Parity' metric. Candidates from specific geographic regions (identified via 'District_Code') are being rejected at a 42% higher rate than the baseline.\n\nFurthermore, the system is utilizing 'Parent_Income_Bracket' as a proxy variable, effectively penalizing candidates despite their academic scores being identical to accepted peers.",
+                  summary,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
                 ),
               ],
@@ -305,21 +352,26 @@ class ResultsScreen extends StatelessWidget {
   }
 }
 
+}
+
 class _MetricRow extends StatelessWidget {
   final String label;
-  final double value;
-  final Color statusColor;
-  final String statusText;
+  final dynamic value;
+  final double threshold;
 
   const _MetricRow({
     required this.label,
     required this.value,
-    required this.statusColor,
-    required this.statusText,
+    required this.threshold,
   });
 
   @override
   Widget build(BuildContext context) {
+    final double val = (value is num) ? value.toDouble() : 0.0;
+    final bool passed = val >= threshold;
+    final statusColor = passed ? AppColors.tertiary : (val < 0.5 ? AppColors.error : AppColors.moderateAmber);
+    final statusText = passed ? 'Passed' : (val < 0.5 ? 'Failed' : 'Warning');
+
     return Row(
       children: [
         Expanded(
@@ -335,7 +387,7 @@ class _MetricRow extends StatelessWidget {
             children: [
               Expanded(
                 child: LinearProgressIndicator(
-                  value: value,
+                  value: val.clamp(0.0, 1.0),
                   backgroundColor: AppColors.surfaceContainerHighest,
                   color: statusColor,
                   minHeight: 8,
@@ -344,7 +396,7 @@ class _MetricRow extends StatelessWidget {
               ),
               const SizedBox(width: 16),
               Text(
-                '${(value * 100).toInt()}%',
+                '${(val * 100).toInt()}%',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -434,3 +486,4 @@ class _ProxyCard extends StatelessWidget {
     );
   }
 }
+

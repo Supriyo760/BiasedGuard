@@ -1,260 +1,119 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../../core/providers/locale_provider.dart';
+import '../../audit/screens/audit_screen.dart';
+import '../../direct_mode/screens/direct_mode_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isHindi = ref.watch(localeProvider.notifier).isHindi;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('System Overview'),
+        title: Row(
+          children: [
+            const Icon(Icons.balance, color: AppColors.primary),
+            const SizedBox(width: 12),
+            Text(
+              'BiasGuard',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+            ),
+          ],
+        ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24.0),
+          // Language Toggle
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Row(
               children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: AppColors.tertiary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'System Healthy',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.tertiary,
-                      ),
-                ),
+                _buildLangBtn('EN', !isHindi),
+                _buildLangBtn('HI', isHindi),
               ],
             ),
-          )
+          ),
+          IconButton(
+            onPressed: () => context.pushNamed('history'),
+            icon: const Icon(Icons.history),
+            tooltip: 'Audit History',
+          ),
+          IconButton(
+            onPressed: () => context.pushNamed('settings'),
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+          ),
+          const SizedBox(width: 8),
         ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Welcome back, Sentinel.',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your models have processed 12,408 decisions this week.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 48),
-
-            // Top Quick Stats
-            Row(
-              children: [
-                Expanded(child: _buildStatCard(context, 'Total Scans', '142', Icons.radar, AppColors.primary)),
-                const SizedBox(width: 24),
-                Expanded(child: _buildStatCard(context, 'Bias Mitigated', '3,480', Icons.shield, AppColors.tertiary)),
-                const SizedBox(width: 24),
-                Expanded(child: _buildStatCard(context, 'Critical Alerts', '2', Icons.warning_rounded, AppColors.error)),
-              ],
-            ),
-            const SizedBox(height: 48),
-
-            // Main Actions
-            Text(
-              'Quick Actions',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionCard(
-                    context,
-                    title: 'New Bias Audit',
-                    subtitle: 'Upload a dataset to detect structural biases',
-                    icon: Icons.upload_file,
-                    color: AppColors.gradientStart,
-                    onTap: () => context.goNamed('audit'),
-                  ),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: _buildActionCard(
-                    context,
-                    title: 'Direct Mode',
-                    subtitle: 'Get an immediate, neutral AI recommendation',
-                    icon: Icons.psychology,
-                    color: AppColors.secondaryContainer,
-                    onTap: () => context.goNamed('direct-mode'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 48),
-
-            // Recent Activity Activity
-            Text(
-              'Recent Scans',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainer,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  _buildHistoryRow(context, 'Bihar_Scholarship_Q1.csv', 'Critical Bias', AppColors.error),
-                  const Divider(),
-                  _buildHistoryRow(context, 'Hiring_Tech_Roles_2025.csv', 'Fair', AppColors.tertiary),
-                  const Divider(),
-                  _buildHistoryRow(context, 'Loan_Approvals_North.csv', 'Moderate Bias', AppColors.moderateAmber),
-                ],
-              ),
-            ),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.primary,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.onSurfaceVariant,
+          tabs: const [
+            Tab(text: 'Audit Mode'),
+            Tab(text: 'Direct Mode'),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildStatCard(BuildContext context, String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.surfaceContainerHighest),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(width: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-            ],
-          ),
+      body: TabBarView(
+        controller: _tabController,
+        children: const [
+          AuditScreen(),
+          DirectModeScreen(),
         ],
       ),
     );
   }
 
-  Widget _buildActionCard(BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
+  Widget _buildLangBtn(String label, bool active) {
+    return GestureDetector(
+      onTap: () => ref.read(localeProvider.notifier).toggleLocale(),
       child: Container(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.surfaceContainerHighest),
+          color: active ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: color.withOpacity(0.3)),
-              ),
-              child: Icon(icon, size: 32, color: color),
-            ),
-            const SizedBox(width: 24),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios, color: AppColors.outlineVariant, size: 20),
-          ],
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? Colors.white : AppColors.onSurfaceVariant,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHistoryRow(BuildContext context, String title, String status, Color statusColor) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Row(
-        children: [
-          const Icon(Icons.insert_drive_file, color: AppColors.outline, size: 28),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text('Today at 10:42 AM', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              status,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-          const SizedBox(width: 24),
-          TextButton(
-            onPressed: () {},
-            child: const Text('View Report'),
-          ),
-        ],
       ),
     );
   }

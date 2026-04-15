@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
@@ -16,6 +17,9 @@ import '../../features/report/screens/report_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/about/screens/about_screen.dart';
+import '../features/onboarding/screens/onboarding_screen.dart';
+import '../features/settings/screens/privacy_policy_screen.dart';
+import '../features/settings/screens/terms_screen.dart';
 
 class AppRoutes {
   static const login        = '/login';
@@ -30,17 +34,52 @@ class AppRoutes {
   static const settings     = '/settings';
   static const profile      = '/profile';
   static const about        = '/about';
+  static const onboarding   = '/onboarding';
+  static const privacy      = '/settings/privacy';
+  static const terms        = '/settings/terms';
 }
 
+final onboardingProvider = FutureProvider<bool>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('onboarding_complete') ?? false;
+});
+
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final onboardingComplete = ref.watch(onboardingProvider);
+
   return GoRouter(
-    initialLocation: AppRoutes.login,
+    initialLocation: AppRoutes.dashboard,
+    redirect: (context, state) {
+      if (onboardingComplete.isLoading) return null;
+      
+      final completed = onboardingComplete.value ?? false;
+      final isGoingToOnboarding = state.matchedLocation == AppRoutes.onboarding;
+
+      if (!completed && !isGoingToOnboarding) {
+        return AppRoutes.onboarding;
+      }
+      
+      // If completed and trying to go back to onboarding, redirect to home
+      if (completed && isGoingToOnboarding) {
+        return AppRoutes.dashboard;
+      }
+
+      if (state.uri.toString() == '/' || state.uri.toString() == '') {
+        return AppRoutes.dashboard;
+      }
+      return null;
+    },
     debugLogDiagnostics: true,
     routes: [
       GoRoute(
         path: AppRoutes.login,
         name: 'login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.onboarding,
+        name: 'onboarding',
+        builder: (context, state) => const OnboardingScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
@@ -106,7 +145,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const SettingsScreen(),
           ),
           GoRoute(
+            path: AppRoutes.privacy,
+            builder: (context, state) => const PrivacyPolicyScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.terms,
+            builder: (context, state) => const TermsScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.profile,
+
             name: 'profile',
             builder: (context, state) => const ProfileScreen(),
           ),
@@ -211,32 +259,37 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = current.startsWith(route);
-    return Tooltip(
-      message: label,
-      preferBelow: false,
-      child: InkWell(
-        onTap: () => context.go(route),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 48,
-          height: 48,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          decoration: BoxDecoration(
-            gradient: isActive
-                ? const LinearGradient(
-                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            icon,
-            size: 22,
-            color: isActive
-                ? Colors.white
-                : const Color(0xFF908FA0),
+    return Semantics(
+      label: 'Navigation to $label',
+      button: true,
+      enabled: true,
+      child: Tooltip(
+        message: label,
+        preferBelow: false,
+        child: InkWell(
+          onTap: () => context.go(route),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 48,
+            height: 48,
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              gradient: isActive
+                  ? const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: isActive
+                  ? Colors.white
+                  : const Color(0xFF908FA0),
+            ),
           ),
         ),
       ),

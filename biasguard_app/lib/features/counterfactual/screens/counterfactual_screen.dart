@@ -1,60 +1,118 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/locale_provider.dart';
+import '../../../core/services/auth_service.dart';
 
-class CounterfactualScreen extends StatefulWidget {
+class CounterfactualScreen extends ConsumerStatefulWidget {
   final String scanId;
 
   const CounterfactualScreen({super.key, required this.scanId});
 
   @override
-  State<CounterfactualScreen> createState() => _CounterfactualScreenState();
+  ConsumerState<CounterfactualScreen> createState() => _CounterfactualScreenState();
 }
 
-class _CounterfactualScreenState extends State<CounterfactualScreen> {
+class _CounterfactualScreenState extends ConsumerState<CounterfactualScreen> {
   double _reweightingAlpha = 0.5;
   bool _isSimulating = false;
-  double _newEquityScore = 0.64; // Base score
+  double _currentEquityScore = 0.64;
+  double _newEquityScore = 0.64;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  void _loadInitialData() async {
+    final uid = AuthService().currentUid ?? 'anonymous';
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .document(uid)
+        .collection('scans')
+        .document(widget.scanId)
+        .get();
+    
+    if (doc.exists && mounted) {
+      final data = doc.data() as Map<String, dynamic>;
+      setState(() {
+        _currentEquityScore = (data['metrics']?['equity_score'] ?? 64).toDouble() / 100.0;
+        _newEquityScore = _currentEquityScore;
+      });
+    }
+  }
 
   void _runSimulation() async {
     setState(() => _isSimulating = true);
+    
+    // In a real scenario, this would call a "dry-run" mitigation CF
     await Future.delayed(const Duration(milliseconds: 1500));
+    
     if (mounted) {
       setState(() {
         _isSimulating = false;
-        // Simulate an improvement based on alpha
-        _newEquityScore = 0.64 + (_reweightingAlpha * 0.3); 
-        if (_newEquityScore > 0.98) _newEquityScore = 0.98;
+        // Logic: Higher alpha = closer to 1.0 fairness, but more accuracy loss
+        _newEquityScore = _currentEquityScore + (_reweightingAlpha * (1.0 - _currentEquityScore) * 0.82);
+        if (_newEquityScore > 0.99) _newEquityScore = 0.99;
       });
     }
   }
 
   void _applyMitigation() async {
     setState(() => _isSimulating = true);
-    await Future.delayed(const Duration(milliseconds: 1000));
-    if (mounted) {
-      setState(() => _isSimulating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mitigation rules successfully applied to Model Configuration.'),
-          backgroundColor: AppColors.tertiary,
-        ),
+    
+    try {
+      final uid = AuthService().currentUid ?? 'anonymous';
+      
+      // Trigger the real mitigation Cloud Function (Member B's work)
+      final response = await http.post(
+        Uri.parse('https://us-central1-biasguard-2026.cloudfunctions.net/triggerMitigation'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'uid': uid,
+          'scan_id': widget.scanId,
+          'alpha': _reweightingAlpha,
+        }),
       );
-      context.goNamed('dashboard');
+
+      if (response.statusCode != 200) throw Exception('Mitigation failed');
+
+      if (mounted) {
+        setState(() => _isSimulating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ref.read(localeProvider.notifier).isHindi 
+                ? 'नियम सफलतापूर्वक लागू किए गए' 
+                : 'Mitigation rules successfully applied.'),
+            backgroundColor: AppColors.tertiary,
+          ),
+        );
+        context.goNamed('dashboard');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSimulating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isHindi = ref.watch(localeProvider.notifier).isHindi;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Counterfactual Simulator'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
+        title: Text(isHindi ? 'काउंटरफ़ैक्चुअल सिम्युलेटर' : 'Counterfactual Simulator'),
       ),
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,19 +127,21 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Mitigation Controls',
+                    isHindi ? 'निवारण नियंत्रण' : 'Mitigation Controls',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Adjust reweighting penalities to observe predicted fairness outcomes without retraining the model.',
+                    isHindi 
+                      ? 'मॉडल को फिर से प्रशिक्षित किए बिना निष्पक्ष परिणाम देखने के लिए वेटिंग पेनल्टी को समायोजित करें।'
+                      : 'Adjust reweighting penalties to observe predicted fairness outcomes without retraining the model.',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: AppColors.onSurfaceVariant,
                         ),
                   ),
                   const SizedBox(height: 48),
 
-                  Text('Target Proxy Feature', style: Theme.of(context).textTheme.titleLarge),
+                  Text(isHindi ? 'प्रॉक्सी विशेषता' : 'Target Proxy Feature', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -102,7 +162,7 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontFamily: 'monospace'),
                             ),
                             Text(
-                              'Currently driving 42% of outcome variance',
+                              isHindi ? 'वर्तमान में 42% परिणाम विचरण को प्रभावित कर रहा है' : 'Currently driving 42% of outcome variance',
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.onSurfaceVariant),
                             ),
                           ],
@@ -115,7 +175,7 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Reweighting Alpha (α)', style: Theme.of(context).textTheme.titleLarge),
+                      Text(isHindi ? 'रीवेटिंग अल्फा (α)' : 'Reweighting Alpha (α)', style: Theme.of(context).textTheme.titleLarge),
                       Text(
                         _reweightingAlpha.toStringAsFixed(2),
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.primary),
@@ -128,18 +188,9 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                     min: 0.0,
                     max: 1.0,
                     activeColor: AppColors.primary,
-                    inactiveColor: AppColors.surfaceContainerHighest,
                     onChanged: (val) {
                       setState(() => _reweightingAlpha = val);
                     },
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('0.0 (No Mitigation)', style: Theme.of(context).textTheme.bodySmall),
-                      Text('1.0 (Strict Parity)', style: Theme.of(context).textTheme.bodySmall),
-                    ],
                   ),
                   const Spacer(),
                   
@@ -150,11 +201,10 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         backgroundColor: AppColors.surfaceContainerHigh,
-                        foregroundColor: AppColors.onSurface,
                       ),
                       child: _isSimulating
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Simulate Outcomes'),
+                          : Text(isHindi ? 'परिणामों का अनुकरण करें' : 'Simulate Outcomes'),
                     ),
                   ),
                 ],
@@ -170,17 +220,16 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Predicted Equity Impact', style: Theme.of(context).textTheme.headlineMedium),
+                  Text(isHindi ? 'पूर्वानुमानित इक्विटी प्रभाव' : 'Predicted Equity Impact', style: Theme.of(context).textTheme.headlineMedium),
                   const SizedBox(height: 32),
                   
-                  // Score Comparison
                   Row(
                     children: [
                       Expanded(
                         child: _buildScoreComparison(
                           context, 
-                          title: 'Current Baseline', 
-                          score: 0.64, 
+                          title: isHindi ? 'वर्तमान बेसलाइन' : 'Current Baseline', 
+                          score: _currentEquityScore, 
                           color: AppColors.error,
                         ),
                       ),
@@ -191,7 +240,7 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                       Expanded(
                         child: _buildScoreComparison(
                           context, 
-                          title: 'Simulated Outcome', 
+                          title: isHindi ? 'सिमुलेटेड परिणाम' : 'Simulated Outcome', 
                           score: _newEquityScore, 
                           color: _newEquityScore > 0.85 ? AppColors.tertiary : AppColors.moderateAmber,
                         ),
@@ -200,7 +249,6 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                   ),
                   const SizedBox(height: 64),
                   
-                  // Accuracy Tradeoff warning
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -217,10 +265,13 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Accuracy Trade-off Notice', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.moderateAmber)),
+                              Text(isHindi ? 'सटीकता समझौता सूचना' : 'Accuracy Trade-off Notice', 
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.moderateAmber)),
                               const SizedBox(height: 8),
                               Text(
-                                'Applying an alpha of ${_reweightingAlpha.toStringAsFixed(2)} improves Demographic Parity by ${((_newEquityScore - 0.64) * 100).toStringAsFixed(1)}%, but is projected to reduce overall model utility (accuracy) by ${(_reweightingAlpha * 4.2).toStringAsFixed(1)}%.',
+                                isHindi 
+                                  ? '${_reweightingAlpha.toStringAsFixed(2)} का अल्फा लागू करने से निष्पक्षता में ${((_newEquityScore - _currentEquityScore) * 100).toStringAsFixed(1)}% सुधार होता है, लेकिन मॉडल उपयोगिता में ${(_reweightingAlpha * 4.2).toStringAsFixed(1)}% की कमी आने का अनुमान है।'
+                                  : 'Applying an alpha of ${_reweightingAlpha.toStringAsFixed(2)} improves fairness by ${((_newEquityScore - _currentEquityScore) * 100).toStringAsFixed(1)}%, but reduces model utility by ${(_reweightingAlpha * 4.2).toStringAsFixed(1)}%.',
                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceVariant, height: 1.5),
                               ),
                             ],
@@ -235,9 +286,9 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       ElevatedButton.icon(
-                        onPressed: _newEquityScore > 0.65 && !_isSimulating ? _applyMitigation : null,
+                        onPressed: _newEquityScore > _currentEquityScore && !_isSimulating ? _applyMitigation : null,
                         icon: const Icon(Icons.check_circle),
-                        label: const Text('Export & Apply Ruleset'),
+                        label: Text(isHindi ? 'नियम लागू करें' : 'Apply Ruleset'),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
                           backgroundColor: AppColors.tertiary,
@@ -280,3 +331,4 @@ class _CounterfactualScreenState extends State<CounterfactualScreen> {
     );
   }
 }
+

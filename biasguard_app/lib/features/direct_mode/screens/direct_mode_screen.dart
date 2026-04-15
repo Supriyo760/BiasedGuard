@@ -18,7 +18,15 @@ class _DirectModeScreenState extends State<DirectModeScreen> {
   Map<String, dynamic>? _apiResult;
 
   void _getRecommendation() async {
-    if (_scenarioController.text.trim().isEmpty) return;
+    if (_scenarioController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please describe the scenario before requesting a decision.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -111,13 +119,19 @@ class _DirectModeScreenState extends State<DirectModeScreen> {
                         ),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    controller: _scenarioController,
-                    maxLines: 8,
-                    style: const TextStyle(color: AppColors.onSurface),
-                    decoration: const InputDecoration(
-                      hintText: 'E.g., Candidate has 5 years of experience in Java, a degree from a state university, and requested 80k salary...',
-                    ),
+                   ValueListenableBuilder(
+                    valueListenable: _scenarioController,
+                    builder: (context, value, child) {
+                      return TextField(
+                        controller: _scenarioController,
+                        maxLines: 8,
+                        style: const TextStyle(color: AppColors.onSurface),
+                        decoration: InputDecoration(
+                          hintText: 'E.g., Candidate has 5 years of experience in Java, a degree from a state university, and requested 80k salary...',
+                          errorText: value.text.isEmpty && _showResult == false ? null : null, // Future: add semantic error state
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
