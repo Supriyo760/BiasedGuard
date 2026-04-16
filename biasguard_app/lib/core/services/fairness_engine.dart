@@ -103,12 +103,26 @@ class FairnessEngine {
   }
 
   String? _detectSensitiveCol(List<String> headers) {
-    final keywords = ['gender', 'caste', 'category', 'religion', 'region', 'age'];
-    for (final h in headers) {
-      for (final k in keywords) {
-        if (h.contains(k)) return h;
+    // Priority-ordered keywords matching the Python backend's SENSITIVE_KEYWORDS
+    final keywordGroups = {
+      'caste':   ['caste', 'category', 'sc_st', 'reservation', 'social_group', 'community'],
+      'gender':  ['gender', 'sex', 'salutation'],
+      'region':  ['district', 'pincode', 'pin_code', 'state', 'region', 'zone', 'area', 'village', 'block'],
+      'income':  ['income', 'salary', 'bpl', 'apl', 'economic', 'family_income', 'annual_income'],
+      'school':  ['school_board', 'board', 'school_type', 'medium', 'institute', 'stream'],
+    };
+
+    // Check priority order: caste > gender > region > income > school
+    for (final entry in keywordGroups.entries) {
+      for (final h in headers) {
+        for (final k in entry.value) {
+          if (h.contains(k)) return h;
+        }
       }
     }
+
+    // Fallback: pick any low-cardinality string column (< 20 unique values)
+    // This will be handled by the caller's data
     return null;
   }
 
