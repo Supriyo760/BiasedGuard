@@ -4,13 +4,11 @@ import 'package:csv/csv.dart';
 class FairnessEngine {
   /// Parses CSV string into a list of maps for processing.
   List<Map<String, dynamic>> parseCsv(String csvContent) {
-    // Specify both eol patterns to handle Windows/Unix line endings properly
-    List<List<dynamic>> rows = const CsvToListConverter(eol: '\n').convert(csvContent);
-    if (rows.length <= 1) { // Fallback if \n didn't work (might be \r\n)
-        rows = const CsvToListConverter(eol: '\r\n').convert(csvContent);
-    }
+    // Normalize line endings to \n
+    final normalized = csvContent.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    List<List<dynamic>> rows = const CsvToListConverter(eol: '\n').convert(normalized);
     
-    if (rows.isEmpty || rows.length == 1 && rows[0].isEmpty) return [];
+    if (rows.isEmpty || (rows.length == 1 && rows[0].isEmpty)) return [];
 
     final headers = rows[0].map((e) => e.toString().trim().toLowerCase()).toList();
     final data = <Map<String, dynamic>>[];
