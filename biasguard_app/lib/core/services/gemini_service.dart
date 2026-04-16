@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'auth_service.dart';
@@ -39,7 +40,9 @@ Respond ONLY with this JSON:
 }''';
 
     try {
-      final response = await _model.generateContent([Content.text(prompt)]);
+      final response = await _model
+          .generateContent([Content.text(prompt)])
+          .timeout(const Duration(seconds: 20));
       final text = response.text ?? '{}';
       return _parseJson(text);
     } catch (e) {
@@ -76,10 +79,24 @@ Return ONLY this JSON:
 }''';
 
     try {
-      final response = await _model.generateContent([Content.text(prompt)]);
+      final response = await _model
+          .generateContent([Content.text(prompt)])
+          .timeout(const Duration(seconds: 20));
       return _parseJson(response.text ?? '{}');
     } catch (e) {
-      return {'explanation_en': 'Analysis failed: ${e.toString()}'};
+      // Timeout or API error — return a meaningful local fallback
+      final severity = equityScore >= 80 ? 'low' : (equityScore >= 50 ? 'medium' : 'high');
+      return {
+        'explanation_en': 'AI analysis could not be completed (${e.runtimeType}). '
+            'Equity Score: $equityScore/100. Demographic Parity: $demographicParity. '
+            'A score below 70 indicates significant disparities across groups.',
+        'explanation_hi': 'AI विश्लेषण पूरा नहीं हो सका। इक्विटी स्कोर: $equityScore/100।',
+        'root_causes': ['Automated analysis unavailable — review group statistics manually'],
+        'proxy_features': [],
+        'mitigation_suggestion': 'Review the group-level approval rates for disparities.',
+        'severity': severity,
+        'india_specific_flags': [],
+      };
     }
   }
 
