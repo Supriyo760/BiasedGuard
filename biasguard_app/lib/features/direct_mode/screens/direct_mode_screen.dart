@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/gemini_service.dart';
+import '../../../core/services/auth_service.dart';
 
 class DirectModeScreen extends StatefulWidget {
   const DirectModeScreen({super.key});
@@ -44,6 +46,21 @@ class _DirectModeScreenState extends State<DirectModeScreen> {
         _apiResult = result;
         _showResult = true;
       });
+
+      // Persistent History Log
+      if (result != null) {
+        final uid = AuthService().currentUid ?? 'anonymous';
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('direct_queries')
+            .add({
+          'use_case': _selectedUseCase,
+          'scenario': _scenarioController.text,
+          'recommendation': result['recommendation'],
+          'created_at': FieldValue.serverTimestamp(),
+        });
+      }
     }
   }
 

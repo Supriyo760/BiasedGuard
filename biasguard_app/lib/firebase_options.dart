@@ -50,12 +50,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_YOUR_WEB_API_KEY',
-    appId: 'REPLACE_WITH_YOUR_WEB_APP_ID',
-    messagingSenderId: 'REPLACE_WITH_YOUR_SENDER_ID',
+    apiKey: 'AIzaSyA1Txy47_jpv4_6ftGPnKlGFV3EN7JQd_E',
+    appId: '1:1069314122947:web:71123fd6a1d3af2e95ee76',
+    messagingSenderId: '1069314122947',
     projectId: 'biasguard-2026',
     authDomain: 'biasguard-2026.firebaseapp.com',
-    storageBucket: 'biasguard-2026.appspot.com',
-    measurementId: 'REPLACE_WITH_YOUR_MEASUREMENT_ID',
+    storageBucket: 'biasguard-2026.firebasestorage.app',
+    measurementId: 'G-78G9NK3214',
   );
 }

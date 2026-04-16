@@ -1,9 +1,9 @@
-import 'dart:io';
+import 'package:intl/intl.dart';
+import 'dart:html' as html;
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
 
 class PdfService {
   static Future<void> generateAuditReport({
@@ -230,7 +230,7 @@ class PdfService {
         pageFormat: PdfPageFormat.a4,
         build: (pw.Context context) {
           return pw.Column(
-            crossAxisAlignment: pw.MainAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               _buildHeader('MITIGATION STRATEGY'),
               pw.SizedBox(height: 20),
@@ -258,7 +258,7 @@ class PdfService {
         pageFormat: PdfPageFormat.a4,
         build: (pw.Context context) {
           return pw.Column(
-            crossAxisAlignment: pw.MainAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               _buildHeader('DETAILED GROUP IMPACT ASSESSMENT'),
               pw.SizedBox(height: 20),
@@ -356,8 +356,152 @@ class PdfService {
       ),
     );
 
-    // Save or Print
+    // Save or Print (Native Dialog)
     await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+  }
+
+  static Future<void> downloadAuditReport({
+    required String scanId,
+    required Map<String, dynamic> scanData,
+    required Map<String, dynamic> analysisData,
+  }) async {
+    final pdf = pw.Document();
+
+    final String datasetName = scanData['dataset_name'] ?? 'BiasGuard_Audit_Dataset';
+    final int equityScore = (scanData['metrics']?['equity_score'] ?? 0).toInt();
+    final String dateStr = DateFormat('dd MMMM yyyy').format(DateTime.now());
+
+    // Load logo safely
+    pw.MemoryImage? logo;
+    try {
+      final logoData = await rootBundle.load('assets/images/logo.png');
+      logo = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (_) {
+      // Fallback allowed
+    }
+
+    // --- Page 1: Cover ---
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Column(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                children: [
+                  pw.SizedBox(height: 50),
+                  if (logo != null) pw.Image(logo, width: 120),
+                  pw.SizedBox(height: 20),
+                  pw.Text('BiasGuard™', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo900)),
+                  pw.Divider(thickness: 2, color: PdfColors.indigo900),
+                  pw.SizedBox(height: 100),
+                  pw.Text('OFFICIAL FAIRNESS AUDIT REPORT', style: pw.TextStyle(fontSize: 32, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5)),
+                  pw.SizedBox(height: 20),
+                  pw.Text('Report ID: $scanId', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+                ],
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(40),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  borderRadius: pw.BorderRadius.circular(20),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('Dataset:', style: pw.TextStyle(color: PdfColors.grey600, fontSize: 10)),
+                            pw.Text(datasetName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                          ],
+                        ),
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.end,
+                          children: [
+                            pw.Text('Audit Date:', style: pw.TextStyle(color: PdfColors.grey600, fontSize: 10)),
+                            pw.Text(dateStr, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 40),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.center,
+                      children: [
+                         pw.Column(
+                           children: [
+                             pw.Text('EQUITY SCORE', style: pw.TextStyle(color: PdfColors.grey600, fontSize: 12, letterSpacing: 2)),
+                             pw.Text('$equityScore / 100', style: pw.TextStyle(
+                               fontSize: 48, 
+                               fontWeight: pw.FontWeight.bold, 
+                               color: equityScore < 70 ? PdfColors.red : PdfColors.green
+                             )),
+                           ]
+                         )
+                      ]
+                    )
+                  ],
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 20),
+                child: pw.Text('Authorized by BiasGuard™ Fairness Engine', style: pw.TextStyle(color: PdfColors.grey500, fontSize: 10)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    // --- Page 2: Summary ---
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _buildHeader('EXECUTIVE SUMMARY'),
+              pw.SizedBox(height: 20),
+              pw.Text(
+                'This report provides a formal assessment of algorithmic fairness for the dataset "$datasetName". '
+                'The analysis focuses on systemic outcome disparities.',
+                style: pw.TextStyle(fontSize: 14, lineSpacing: 4),
+              ),
+              pw.SizedBox(height: 40),
+              pw.Text('Gemini Analysis Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 10),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(20),
+                decoration: const pw.BoxDecoration(
+                  color: PdfColors.indigo50,
+                  border: pw.Border(left: pw.BorderSide(color: PdfColors.indigo900, width: 4)),
+                ),
+                child: pw.Text(
+                  analysisData['explanation_en'] ?? 'No analysis content available.',
+                  style: const pw.TextStyle(fontSize: 12, lineSpacing: 3),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    // Save as Bytes and trigger Web Download
+    final bytes = await pdf.save();
+    final blob = html.Blob([bytes], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    
+    html.AnchorElement(href: url)
+      ..setAttribute("download", "BiasGuard_Fairness_Report_${scanId.substring(0, 5)}.pdf")
+      ..click();
+    
+    html.Url.revokeObjectUrl(url);
   }
 
   static pw.Widget _buildHeader(String title) {

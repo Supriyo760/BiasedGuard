@@ -17,6 +17,7 @@ biasguard/lib/core/config/firebase_options.dart
 .env
 *.env
 .env.local
+functions/.env
 
 # Cloud Functions
 functions/__pycache__/

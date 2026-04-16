@@ -23,7 +23,7 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": "biasguard/build/web",
+    "public": "biasguard_app/build/web",
     "ignore": [
       "firebase.json",
       "**/.*",

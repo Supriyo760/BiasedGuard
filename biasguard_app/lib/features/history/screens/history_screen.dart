@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
 
@@ -15,11 +16,19 @@ class HistoryScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Audit History'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => _handleClearHistory(context, uid),
+            icon: const Icon(Icons.delete_sweep, color: AppColors.error),
+            label: const Text('Clear All', style: TextStyle(color: AppColors.error)),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
-            .document(uid)
+            .doc(uid)
             .collection('scans')
             .orderBy('created_at', descending: true)
             .snapshots(),
@@ -94,6 +103,45 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
+  void _handleClearHistory(BuildContext context, String uid) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All History?'),
+        content: const Text(
+          'This will permanently delete all your audit scans. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear Everything', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final batch = FirebaseFirestore.instance.batch();
+      final scans = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('scans')
+          .get();
+
+      for (var doc in scans.docs) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('History cleared successfully.')),
+        );
+      }
+    }
+  }
+
   Widget _buildHistoryRow(BuildContext context, String scanId, Map<String, dynamic> data) {
     final title = data['dataset_name'] ?? 'Untitled Scan';
     final status = data['status'] == 'analysis_complete' ? 'Complete' : (data['status']?.toString().toUpperCase() ?? 'Processing');
@@ -152,13 +200,27 @@ class HistoryScreen extends StatelessWidget {
                   ),
             ),
           ),
-          const SizedBox(width: 24),
-          IconButton(
+          const SizedBox(width: 8),
+          ElevatedButton(
             onPressed: () {
-              // Navigation to Results with this scanId
+              context.pushNamed('results', extra: {'scanId': scanId});
             },
-            icon: const Icon(Icons.arrow_forward_ios, size: 16),
-            color: AppColors.primary,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.surfaceContainerHigh,
+              foregroundColor: AppColors.onSurface,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'View Report',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

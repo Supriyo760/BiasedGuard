@@ -5,14 +5,22 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/services/pdf_service.dart';
 import '../../../core/services/auth_service.dart';
 
-class ReportScreen extends StatelessWidget {
+class ReportScreen extends StatefulWidget {
   final String scanId;
 
   const ReportScreen({super.key, required this.scanId});
 
   @override
+  State<ReportScreen> createState() => _ReportScreenState();
+}
+
+class _ReportScreenState extends State<ReportScreen> {
+  bool _isDownloading = false;
+
+  @override
   Widget build(BuildContext context) {
     final uid = AuthService().currentUid ?? 'anonymous';
+    final scanId = widget.scanId;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -22,13 +30,17 @@ class ReportScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        bottom: _isDownloading ? const PreferredSize(
+          preferredSize: Size.fromHeight(4),
+          child: LinearProgressIndicator(backgroundColor: Colors.transparent),
+        ) : null,
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
-            .document(uid)
+            .doc(uid)
             .collection('scans')
-            .document(scanId)
+            .doc(scanId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -128,15 +140,27 @@ class ReportScreen extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       ElevatedButton.icon(
-                        onPressed: () {
-                          PdfService.generateAuditReport(
-                            scanId: scanId,
-                            scanData: scanData,
-                            analysisData: analysisData,
-                          );
+                        onPressed: _isDownloading ? null : () async {
+                          setState(() => _isDownloading = true);
+                          try {
+                            await PdfService.downloadAuditReport(
+                              scanId: scanId,
+                              scanData: scanData,
+                              analysisData: analysisData,
+                            );
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('PDF Generated & Downloading...')),
+                              );
+                            }
+                          } finally {
+                            if (mounted) setState(() => _isDownloading = false);
+                          }
                         },
-                        icon: const Icon(Icons.download),
-                        label: const Text('Download Official PDF'),
+                        icon: _isDownloading 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.download),
+                        label: Text(_isDownloading ? 'Generating...' : 'Download Official PDF'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF6366F1),
                           foregroundColor: Colors.white,

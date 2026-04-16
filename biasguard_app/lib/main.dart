@@ -18,8 +18,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Sign in anonymously to get a UID
-  await AuthService().signInAnonymously();
+  // Sign in anonymously (non-blocking)
+  AuthService().signInAnonymously();
   
   runApp(
     const ProviderScope(

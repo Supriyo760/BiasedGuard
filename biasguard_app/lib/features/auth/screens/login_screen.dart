@@ -325,6 +325,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: _isLoading ? null : _handleGuestLogin,
                         child: const Text('Continue as Guest (Anonymous)'),
                       ),
+                      const SizedBox(height: 32),
+                      // Footer
+                      Text(
+                        'v1.0.0 · Made in Bihar, India.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.outline,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
                     ],
                   ),
                 ),

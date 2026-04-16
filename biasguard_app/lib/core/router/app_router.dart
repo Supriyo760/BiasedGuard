@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
+import '../theme/app_theme.dart';
 
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
@@ -17,9 +19,9 @@ import '../../features/report/screens/report_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/about/screens/about_screen.dart';
-import '../features/onboarding/screens/onboarding_screen.dart';
-import '../features/settings/screens/privacy_policy_screen.dart';
-import '../features/settings/screens/terms_screen.dart';
+import '../../features/onboarding/screens/onboarding_screen.dart';
+import '../../features/settings/screens/privacy_policy_screen.dart';
+import '../../features/settings/screens/terms_screen.dart';
 
 class AppRoutes {
   static const login        = '/login';
@@ -102,6 +104,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               return ProcessingScreen(
                 fileName: extra?['fileName'] ?? 'Dataset',
                 scanId: extra?['scanId'] ?? '',
+                csvData: extra?['csvData'], // Pass CSV string
+                isDemo: extra?['isDemo'] ?? false,
+                useCase: extra?['useCase'],
               );
             },
           ),
@@ -232,10 +237,18 @@ class _SideNav extends StatelessWidget {
           const Spacer(),
           _NavItem(icon: Icons.settings_outlined, label: 'Settings',
               route: AppRoutes.settings, current: route),
-          _NavItem(icon: Icons.person_outline, label: 'Profile',
-              route: AppRoutes.profile, current: route),
           _NavItem(icon: Icons.info_outline, label: 'About',
               route: AppRoutes.about, current: route),
+          const Divider(height: 32, color: Color(0xFF2A2A45)),
+          ListTile(
+            dense: true,
+            leading: Icon(Icons.logout, color: AppColors.error, size: 20),
+            title: Text('Sign Out', style: TextStyle(color: AppColors.error, fontSize: 13)),
+            onTap: () async {
+              await AuthService().signOut();
+              if (context.mounted) context.go('/login');
+            },
+          ),
           const SizedBox(height: 24),
         ],
       ),

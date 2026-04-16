@@ -1,19 +1,19 @@
-import 'dart:async';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/gemini_service.dart';
+import '../../../core/services/fairness_engine.dart';
 import 'dart:math' as math;
 
 class ProcessingScreen extends StatefulWidget {
   final String scanId;
   final String fileName;
-  final String storagePath;
+  final String? csvData; // Changed from storagePath
   final bool isDemo;
   final String? useCase;
 
@@ -21,9 +21,11 @@ class ProcessingScreen extends StatefulWidget {
     super.key,
     required this.scanId,
     required this.fileName,
-    required this.storagePath,
+    this.csvData,
     this.isDemo = false,
     this.useCase,
+    // Keep backward compatibility for demo routes if needed
+    String? storagePath, 
   });
 
   @override
@@ -34,21 +36,9 @@ class _ProcessingScreenState extends State<ProcessingScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   int _currentStep = 0;
-  StreamSubscription? _statusSubscription;
   final AuthService _auth = AuthService();
+  final FairnessEngine _engine = FairnessEngine();
   
-  // Mapping backend statuses to our UI steps
-  final Map<String, int> _statusMap = {
-    'uploading': 0,
-    'processing': 1,
-    'detecting': 1,
-    'calculating': 2,
-    'metrics_complete': 2,
-    'analysing': 3,
-    'analysis_complete': 4,
-    'error': -1,
-  };
-
   final List<String> _steps = [
     AppStrings.processingStep1, // Data validation
     AppStrings.processingStep2, // Detecting Sensitive Groups
@@ -64,71 +54,89 @@ class _ProcessingScreenState extends State<ProcessingScreen>
       duration: const Duration(seconds: 2),
     )..repeat();
 
-    if (widget.isDemo) {
-      _simulateProcessing();
-    } else {
-      _startRealProcessing();
-    }
+    _runLocalProcessing();
   }
 
-  void _startRealProcessing() async {
-    final uid = _auth.currentUid ?? 'anonymous';
-    
-    // 1. Trigger the Cloud Function (CF1)
+  void _runLocalProcessing() async {
     try {
-      final response = await http.post(
-        Uri.parse('https://us-central1-biasguard-2026.cloudfunctions.net/parseAndCalculateMetrics'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'uid': uid,
-          'scan_id': widget.scanId,
-          'storage_path': widget.storagePath,
-          'dataset_name': widget.fileName,
-          'use_case': widget.useCase ?? 'General Decision Making',
-        }),
-      );
+      final uid = _auth.currentUid ?? 'anonymous';
+      String dataToProcess = widget.csvData ?? '';
 
-      if (response.statusCode != 200) {
-        throw Exception('Failed to start processing: ${response.body}');
+      // Step 0: Handle Demo Data
+      if (widget.isDemo) {
+        setState(() => _currentStep = 0);
+        // Map common demo file names to their asset paths
+        final assetPath = 'assets/demo/${widget.fileName}';
+        try {
+          dataToProcess = await rootBundle.loadString(assetPath);
+        } catch (e) {
+          throw Exception("Could not load demo data: ${widget.fileName}. Ensure it exists in assets.");
+        }
+        await Future.delayed(const Duration(milliseconds: 1000));
       }
 
-      // 2. Listen to Firestore for status updates
-      _statusSubscription = FirebaseFirestore.instance
+      if (dataToProcess.isEmpty) {
+        throw Exception("No data provides for processing.");
+      }
+
+      // Step 1: Validation
+      setState(() => _currentStep = 0);
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      // Step 2 & 3: Run Fairness Engine Locally
+      setState(() => _currentStep = 1);
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      setState(() => _currentStep = 2);
+      final results = _engine.runFullMetrics(dataToProcess, null);
+      
+      // Step 4: Local AI Analysis
+      setState(() => _currentStep = 3);
+      final analysis = await geminiService.analyseAuditResults(
+        useCase: widget.useCase ?? 'General Audit',
+        columns: results['column_names'],
+        groupStats: results['group_stats'],
+        overallRate: results['overall_approval_rate'],
+        demographicParity: results['demographic_parity'],
+        equityScore: results['equity_score'],
+      );
+
+      // Final Step: Write to Firestore (Persistence)
+      final scanRef = FirebaseFirestore.instance
           .collection('users')
-          .document(uid)
+          .doc(uid)
           .collection('scans')
-          .document(widget.scanId)
-          .snapshots()
-          .listen((snapshot) {
-        if (!snapshot.exists || !mounted) return;
+          .doc(widget.scanId);
 
-        final data = snapshot.data();
-        final status = data?['status'] as String?;
-        debugPrint('Scan Status Update: $status');
-
-        if (status == 'error') {
-          _handleError(data?['error_message'] ?? 'Unknown processing error');
-          return;
-        }
-
-        if (status == 'analysis_complete') {
-          // Success!
-          _statusSubscription?.cancel();
-          context.goNamed('results', extra: {'scanId': widget.scanId});
-          return;
-        }
-
-        // Update UI step based on status
-        final step = _statusMap[status] ?? _currentStep;
-        if (mounted && step != -1) {
-          setState(() {
-            _currentStep = math.max(_currentStep, step);
-          });
-        }
-
-        // Special case: if metrics are done, the backend will trigger CF2 (Gemini)
-        // We just keep listening.
+      // 1. Consolidated Scan Document (Maintains UI Compatibility)
+      await scanRef.set({
+        'fileName': widget.fileName,
+        'dataset_name': widget.fileName,
+        'status': 'analysis_complete',
+        'use_case': 'General',
+        'updated_at': FieldValue.serverTimestamp(),
+        'created_at': FieldValue.serverTimestamp(),
+        // Core Metrics
+        'metrics': {
+          'equity_score': results['equity_score'] ?? 0,
+          'demographic_parity': results['demographic_parity'] ?? 0,
+          'equal_opportunity': results['equal_opportunity'] ?? 0,
+          'equalized_odds': results['equalized_odds'] ?? 0,
+          'predictive_parity': results['predictive_parity'] ?? 0,
+          'consistency': results['consistency'] ?? 0,
+          'severity': results['severity'] ?? 'LOW',
+          'row_count': results['total_count'],
+          'group_stats': results['group_stats'],
+        },
+        // AI Analysis
+        'analysis': analysis,
+        // Proxies (if any)
+        'proxies': results['proxies'] ?? [],
       });
+
+      if (mounted) {
+        context.goNamed('results', extra: {'scanId': widget.scanId});
+      }
     } catch (e) {
       _handleError(e.toString());
     }
@@ -136,7 +144,6 @@ class _ProcessingScreenState extends State<ProcessingScreen>
 
   void _handleError(String message) {
     if (!mounted) return;
-    _statusSubscription?.cancel();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -154,23 +161,10 @@ class _ProcessingScreenState extends State<ProcessingScreen>
     });
   }
 
-  void _simulateProcessing() async {
-    for (int i = 0; i < _steps.length; i++) {
-      if (!mounted) return;
-      setState(() {
-        _currentStep = i;
-      });
-      await Future.delayed(Duration(milliseconds: i == 2 ? 3000 : 1500));
-    }
-    if (mounted) {
-      context.goNamed('results', extra: {'scanId': widget.scanId});
-    }
-  }
 
   @override
   void dispose() {
     _animController.dispose();
-    _statusSubscription?.cancel();
     super.dispose();
   }
 

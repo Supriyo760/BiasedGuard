@@ -1,12 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/services/auth_service.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../core/services/auth_service.dart';
 
 class AuditScreen extends ConsumerStatefulWidget {
   const AuditScreen({super.key});
@@ -20,7 +20,6 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
   bool _isUploading = false;
   bool _anonymizeData = true; // Default to true for safety
   PlatformFile? _selectedFile;
-  final AuthService _auth = AuthService();
 
   void _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -57,34 +56,31 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     setState(() => _isUploading = true);
 
     try {
-      final uid = _auth.currentUid ?? 'anonymous';
       final scanId = 'scan-${DateTime.now().millisecondsSinceEpoch}';
-      final storagePath = 'uploads/$uid/$scanId.csv';
-
-      // 1. Upload to Firebase Storage
-      final ref = FirebaseStorage.instance.ref().child(storagePath);
       
-      // On Web, use bytes.
-      if (_selectedFile!.bytes != null) {
-        await ref.putData(_selectedFile!.bytes!);
-      } else {
-        throw Exception("File data is not available for upload.");
+      // 1. Read file bytes locally (Works on Web and Mobile)
+      final bytes = _selectedFile!.bytes;
+      if (bytes == null) {
+        throw Exception("File data is not available.");
       }
+      
+      final csvString = utf8.decode(bytes);
 
-      // 2. Navigate to processing
+      // 2. Navigate to processing with the actual CSV string
       if (mounted) {
         context.pushNamed('processing', extra: {
           'fileName': _selectedFile!.name,
           'scanId': scanId,
-          'storagePath': storagePath,
+          'csvData': csvString, // NEW: Pass data directly
           'isDemo': false,
           'anonymize': _anonymizeData,
+          'useCase': 'General Audit',
         });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Processing failed: $e'), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -265,7 +261,64 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                 onTap: () => _useDemoData('loan_application_demo.csv'),
               ),
             ],
-          )
+          ),
+
+          // ─── Why Audit Section (from Stitch) ───────────────
+          const SizedBox(height: 64),
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.bolt, color: AppColors.primary, size: 28),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isHindi ? 'आपके डेटा का ऑडिट क्यों?' : 'Why Audit Your Data?',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        isHindi
+                            ? 'हमारी सर्वोच्च बुद्धिमत्ता लिंग, जातीयता और सामाजिक-आर्थिक संकेतकों में छिपे पूर्वाग्रह की पहचान करती है।'
+                            : 'Our sovereign intelligence identifies latent bias across gender, ethnicity, and socio-economic indicators that standard statistical tests miss. Upload your CSV to generate a comprehensive Sentinel Report.',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: AppColors.onSurfaceVariant,
+                              height: 1.6,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ─── Bottom Status Bar ──────────────────────────────
+          const SizedBox(height: 32),
+          Center(
+            child: Text(
+              'Sovereign Intelligence • Data Privacy Encrypted',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.outline,
+                    letterSpacing: 1.5,
+                  ),
+            ),
+          ),
         ],
       ),
     );

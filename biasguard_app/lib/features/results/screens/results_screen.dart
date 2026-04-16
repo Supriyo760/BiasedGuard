@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../core/constants/app_strings.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/router/app_router.dart';
-import '../../../core/services/auth_service.dart';
+import 'package:go_router/go_router.dart';
 import '../widgets/result_skeleton.dart';
+import '../../../core/providers/locale_provider.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/constants/app_strings.dart';
+import '../../../core/services/auth_service.dart';
 
 class ResultsScreen extends ConsumerWidget {
   final String scanId;
@@ -350,8 +350,6 @@ class ResultsScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
 }
 
 class _MetricRow extends StatelessWidget {
