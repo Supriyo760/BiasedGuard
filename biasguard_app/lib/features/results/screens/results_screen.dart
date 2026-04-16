@@ -10,8 +10,9 @@ import '../../../core/services/auth_service.dart';
 
 class ResultsScreen extends ConsumerWidget {
   final String scanId;
+  final Map<String, dynamic>? scanData;
 
-  const ResultsScreen({super.key, required this.scanId});
+  const ResultsScreen({super.key, required this.scanId, this.scanData});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,57 +37,28 @@ class ResultsScreen extends ConsumerWidget {
           const SizedBox(width: 16),
         ],
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .collection('scans')
-            .doc(scanId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const ResultSkeleton();
-          }
+      body: scanData != null
+          ? _buildResultsContent(context, scanData!, isHindi)
+          : StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(uid)
+                  .collection('scans')
+                  .doc(scanId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const ResultSkeleton();
+                }
 
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return _buildNotFound(context);
-          }
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return _buildNotFound(context);
+                }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          final metrics = data['metrics'] as Map<String, dynamic>? ?? {};
-          final analysis = data['analysis'] as Map<String, dynamic>? ?? {};
-          final proxies = (data['proxies'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Section: Score & Status
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildEquityScoreCard(context, metrics, isHindi),
-                    const SizedBox(width: 24),
-                    Expanded(child: _buildBiasStatusCard(context, metrics, isHindi)),
-                  ],
-                ),
-                const SizedBox(height: 32),
-
-                // Middle Section: Proxy Detection & AI Explanation
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 1, child: _buildProxyDetection(context, proxies, isHindi)),
-                    const SizedBox(width: 24),
-                    Expanded(flex: 2, child: _buildAiAnalysis(context, analysis, isHindi)),
-                  ],
-                ),
-              ],
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                return _buildResultsContent(context, data, isHindi);
+              },
             ),
-          );
-        },
-      ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(24),
         color: AppColors.surfaceContainerLow,
@@ -117,6 +89,41 @@ class ResultsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResultsContent(BuildContext context, Map<String, dynamic> data, bool isHindi) {
+    final metrics = data['metrics'] as Map<String, dynamic>? ?? {};
+    final analysis = data['analysis'] as Map<String, dynamic>? ?? {};
+    final proxies = (data['proxies'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top Section: Score & Status
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildEquityScoreCard(context, metrics, isHindi),
+              const SizedBox(width: 24),
+              Expanded(child: _buildBiasStatusCard(context, metrics, isHindi)),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Middle Section: Proxy Detection & AI Explanation
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 1, child: _buildProxyDetection(context, proxies, isHindi)),
+              const SizedBox(width: 24),
+              Expanded(flex: 2, child: _buildAiAnalysis(context, analysis, isHindi)),
+            ],
+          ),
+        ],
       ),
     );
   }

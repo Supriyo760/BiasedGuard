@@ -79,7 +79,7 @@ class FairnessEngine {
     if (outcomeCol == null) throw Exception('Could not detect outcome column.');
 
     final data = binariseData(rawData, outcomeCol);
-    final groupCol = manualGroupCol ?? _detectSensitiveCol(headers);
+    final groupCol = manualGroupCol ?? _detectSensitiveCol(headers, rawData);
     if (groupCol == null) throw Exception('No sensitive attribute (group) detected.');
 
     final stats = _calculateGroupStats(data, groupCol, outcomeCol);
@@ -106,7 +106,7 @@ class FairnessEngine {
     };
   }
 
-  String? _detectSensitiveCol(List<String> headers) {
+  String? _detectSensitiveCol(List<String> headers, List<Map<String, dynamic>> data) {
     // Priority-ordered keywords matching the Python backend's SENSITIVE_KEYWORDS
     final keywordGroups = {
       'caste':   ['caste', 'category', 'sc_st', 'reservation', 'social_group', 'community'],
@@ -125,9 +125,18 @@ class FairnessEngine {
       }
     }
 
-    // Fallback: pick any low-cardinality string column (< 20 unique values)
-    // This will be handled by the caller's data
-    return null;
+    // Fallback: pick any low-cardinality column if no sensitive keywords matched
+    String? fallbackCol;
+    for (final h in headers) {
+      final uniqueVals = data.map((e) => e[h]).toSet();
+      if (uniqueVals.length >= 2 && uniqueVals.length <= 15) {
+        if (!h.contains('id') && !h.contains('num')) {
+          fallbackCol = h;
+          break;
+        }
+      }
+    }
+    return fallbackCol ?? headers.first;
   }
 
   Map<String, dynamic> _calculateGroupStats(List<Map<String, dynamic>> data, String groupCol, String outcomeCol) {

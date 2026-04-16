@@ -108,8 +108,7 @@ class _ProcessingScreenState extends State<ProcessingScreen>
           .collection('scans')
           .doc(widget.scanId);
 
-      // 1. Consolidated Scan Document (Maintains UI Compatibility)
-      await scanRef.set({
+      final scanData = {
         'fileName': widget.fileName,
         'dataset_name': widget.fileName,
         'status': 'analysis_complete',
@@ -132,10 +131,16 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         'analysis': analysis,
         // Proxies (if any)
         'proxies': results['proxies'] ?? [],
-      });
+      };
+
+      // Fire-and-forget to Firestore (DO NOT await) so UI doesn't hang if backend is unreachable
+      scanRef.set(scanData).catchError((_) => null);
 
       if (mounted) {
-        context.goNamed('results', extra: {'scanId': widget.scanId});
+        context.goNamed('results', extra: {
+          'scanId': widget.scanId,
+          'scanData': scanData,
+        });
       }
     } catch (e) {
       _handleError(e.toString());

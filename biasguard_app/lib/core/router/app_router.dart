@@ -115,7 +115,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'results',
             builder: (context, state) {
               final extra = state.extra as Map<String, dynamic>?;
-              return ResultsScreen(scanId: extra?['scanId'] ?? '');
+              return ResultsScreen(
+                scanId: extra?['scanId'] ?? '',
+                scanData: extra?['scanData'],
+              );
             },
           ),
           GoRoute(
