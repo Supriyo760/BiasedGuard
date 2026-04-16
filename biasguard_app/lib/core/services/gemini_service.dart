@@ -4,17 +4,14 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'auth_service.dart';
 
 class GeminiService {
-  // Use the API key provided by the user, with an environment variable option for CI/CD
-  static const String _apiKey = String.fromEnvironment(
-    'GEMINI_API_KEY',
-    defaultValue: 'AIzaSyCL1lOTlhp3DXX0KjPAQEVK3CNETjC1UTg',
-  );
+  // API key injected at build time via: --dart-define=GEMINI_API_KEY=your_key
+  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
 
   late final GenerativeModel _model;
 
   GeminiService() {
     _model = GenerativeModel(
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       apiKey: _apiKey,
     );
   }
